@@ -168,7 +168,7 @@ The extension now:
 - ✅ All download records removed from list
 - ✅ Stats reset to zero
 - ✅ Badge cleared
-- ✅ Active downloads are not affected
+- ✅ Active downloads continue in the background and are not affected (they will still complete normally)
 
 ### Test Case 10: File Naming and Conflicts
 
@@ -226,7 +226,7 @@ Here are some safe test URLs for downloading files:
 - Ensure domain is not blacklisted
 
 **Issue**: Files not saved in ThunderDownloads folder
-- Check browser's default download directory setting
+- Check the browser's default download directory setting
 - Verify browser has permission to write to download directory
 - Check for disk space
 
