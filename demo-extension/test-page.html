@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>下载测试页面 - Download Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #FF0000;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+        .download-link {
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .download-link:hover {
+            background: #0056b3;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚫 下载拦截演示测试页面</h1>
+    <h2>Download Interception Demo Test Page</h2>
+
+    <div class="info">
+        <strong>📋 使用说明 (Instructions):</strong>
+        <ol>
+            <li>确保已安装 demo-extension 扩展 (Make sure demo-extension is installed)</li>
+            <li>点击下方的下载链接 (Click the download links below)</li>
+            <li>观察扩展是否拦截下载 (Observe if extension intercepts downloads)</li>
+            <li>点击扩展图标查看拦截历史 (Click extension icon to view history)</li>
+        </ol>
+    </div>
+
+    <div class="warning">
+        <strong>⚠️ 注意 (Note):</strong><br>
+        这些是示例链接。在真实测试中，请使用实际的大文件下载链接。<br>
+        These are example links. For real testing, use actual large file download links.
+    </div>
+
+    <div class="section">
+        <h3>测试场景 1: 大文件下载 (Large File Downloads)</h3>
+        <p>这些下载应该被拦截（文件类型和大小符合条件）：</p>
+        
+        <!-- 这些是示例链接，实际测试时需要替换为真实的下载链接 -->
+        <a href="https://example.com/file.zip" class="download-link" download="test.zip">
+            📦 下载 ZIP 文件 (假设 > 2MB)
+        </a><br>
+        
+        <a href="https://example.com/software.exe" class="download-link" download="software.exe">
+            💾 下载 EXE 文件 (假设 > 2MB)
+        </a><br>
+        
+        <a href="https://example.com/archive.rar" class="download-link" download="archive.rar">
+            📁 下载 RAR 文件 (假设 > 2MB)
+        </a>
+    </div>
+
+    <div class="section">
+        <h3>测试场景 2: 小文件（应该不被拦截）</h3>
+        <p>这些下载不会被拦截（文件小于 2MB）：</p>
+        
+        <a href="data:text/plain;charset=utf-8,Hello%20World" class="download-link" download="small.txt">
+            📄 下载小文本文件 (< 2MB)
+        </a>
+    </div>
+
+    <div class="section">
+        <h3>测试场景 3: 黑名单域名（应该不被拦截）</h3>
+        <p>来自黑名单域名的下载不会被拦截：</p>
+        
+        <p style="color: #666;">
+            示例: youtube.com, bilibili.com 等<br>
+            Example: youtube.com, bilibili.com, etc.
+        </p>
+    </div>
+
+    <div class="section">
+        <h3>真实测试建议 (Real Test Suggestions)</h3>
+        <p>要真正测试拦截功能，可以尝试：</p>
+        <ul>
+            <li>访问开源软件下载站点（如 SourceForge, GitHub Releases）</li>
+            <li>下载 Linux 发行版 ISO 文件</li>
+            <li>下载大型压缩包文件</li>
+            <li>使用 Chrome 开发者工具查看拦截过程</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h3>验证步骤 (Verification Steps)</h3>
+        <ol>
+            <li><strong>检查控制台</strong>: 打开扩展的 Service Worker 控制台
+                <ul>
+                    <li>访问 <code>chrome://extensions/</code></li>
+                    <li>找到 "Download Interception Demo"</li>
+                    <li>点击 "Service Worker" 查看日志</li>
+                </ul>
+            </li>
+            <li><strong>查看拦截历史</strong>: 点击扩展图标打开弹窗
+                <ul>
+                    <li>显示所有被拦截的下载</li>
+                    <li>包含文件名、大小、来源等信息</li>
+                </ul>
+            </li>
+            <li><strong>测试启用/禁用</strong>: 在弹窗中切换拦截状态
+                <ul>
+                    <li>禁用后下载应该正常进行</li>
+                    <li>启用后符合条件的下载会被拦截</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="info">
+        <strong>💡 提示 (Tips):</strong>
+        <ul>
+            <li>所有拦截事件都会在控制台输出详细日志</li>
+            <li>扩展图标上的徽章会显示拦截次数</li>
+            <li>可以在 <code>background.js</code> 中修改 CONFIG 来调整拦截条件</li>
+            <li>建议先用小文件测试，确保扩展正常工作</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h3>代码示例 (Code Examples)</h3>
+        <p>如何创建一个会被拦截的下载链接：</p>
+        <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto;">
+&lt;!-- HTML 方式 --&gt;
+&lt;a href="https://example.com/large-file.zip" download&gt;
+    下载大文件
+&lt;/a&gt;
+
+&lt;!-- JavaScript 方式 --&gt;
+&lt;script&gt;
+function downloadFile() {
+    const link = document.createElement('a');
+    link.href = 'https://example.com/large-file.exe';
+    link.download = 'software.exe';
+    link.click();
+}
+&lt;/script&gt;
+        </pre>
+    </div>
+
+    <script>
+        // 在控制台输出测试信息
+        console.log('%c🚫 Download Interception Demo Test Page', 'font-size: 20px; color: red; font-weight: bold;');
+        console.log('This page is for testing the download interception extension.');
+        console.log('Click any download link and check if the extension intercepts it.');
+        
+        // 监听下载链接点击
+        document.querySelectorAll('.download-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                console.log('Download link clicked:', this.href);
+                console.log('Expected to be intercepted:', this.href.match(/\.(zip|exe|rar|7z|iso)$/) ? 'YES' : 'NO');
+            });
+        });
+    </script>
+</body>
+</html>
