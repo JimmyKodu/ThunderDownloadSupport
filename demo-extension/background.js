@@ -15,7 +15,10 @@ const CONFIG = {
   monitoredExtensions: ['exe', 'zip', 'rar', '7z', 'iso', 'dmg', 'pkg', 'deb', 'rpm', 'apk'],
   
   // 黑名单域名 (不拦截这些网站的下载)
-  blacklistDomains: ['youtube.com', 'youku.com', 'bilibili.com', 'iqiyi.com']
+  blacklistDomains: ['youtube.com', 'youku.com', 'bilibili.com', 'iqiyi.com'],
+  
+  // 下载文件夹名称 - Download folder name
+  downloadFolder: 'ThunderDownloads'
 };
 
 // 存储下载信息 - Store download information
@@ -23,6 +26,9 @@ const downloadRequests = new Map();
 
 // 记录拦截的下载 - Log intercepted downloads
 const interceptedDownloads = [];
+
+// 追踪后台下载 - Track background downloads
+const backgroundDownloads = new Map();
 
 // ============================================================================
 // 1. 监听 HTTP 响应头 - Monitor HTTP Response Headers
@@ -91,7 +97,8 @@ chrome.downloads.onDeterminingFilename.addListener(async (downloadItem, suggest)
     size: downloadItem.fileSize,
     referrer: downloadItem.referrer,
     cookies: cookies,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    status: 'intercepted'
   };
   
   interceptedDownloads.push(interceptInfo);
@@ -109,12 +116,11 @@ chrome.downloads.onDeterminingFilename.addListener(async (downloadItem, suggest)
     console.error('Error cancelling download:', error);
   }
   
+  // 启动后台静默下载 - Start silent background download
+  startBackgroundDownload(interceptInfo);
+  
   // 显示通知 - Show notification
   showInterceptionNotification(interceptInfo);
-  
-  // 在真实场景中，这里会调用外部下载器 (如迅雷)
-  // In real scenario, this would invoke external downloader (like Thunder)
-  console.log('📥 Would invoke external downloader with:', interceptInfo);
 });
 
 // ============================================================================
@@ -213,6 +219,54 @@ async function getCookies(url) {
   });
 }
 
+// 启动后台静默下载 - Start silent background download
+async function startBackgroundDownload(interceptInfo) {
+  console.log('🚀 Starting background download for:', interceptInfo.filename);
+  
+  try {
+    // 构建下载选项 - Build download options
+    const downloadOptions = {
+      url: interceptInfo.url,
+      filename: `${CONFIG.downloadFolder}/${interceptInfo.filename}`,
+      saveAs: false, // 静默下载，不显示保存对话框 - Silent download, no save dialog
+      conflictAction: 'uniquify' // 如果文件已存在，自动重命名 - Auto-rename if file exists
+    };
+    
+    // 如果有 referrer，添加到请求头中 - Add referrer if available
+    if (interceptInfo.referrer) {
+      downloadOptions.headers = [
+        { name: 'Referer', value: interceptInfo.referrer }
+      ];
+    }
+    
+    console.log('Download options:', downloadOptions);
+    
+    // 启动下载 - Start download
+    chrome.downloads.download(downloadOptions, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error('❌ Error starting download:', chrome.runtime.lastError);
+        interceptInfo.status = 'failed';
+        interceptInfo.error = chrome.runtime.lastError.message;
+        return;
+      }
+      
+      console.log('✅ Background download started with ID:', downloadId);
+      
+      // 记录下载ID和信息的映射 - Map download ID to info
+      backgroundDownloads.set(downloadId, interceptInfo);
+      interceptInfo.downloadId = downloadId;
+      interceptInfo.status = 'downloading';
+      
+      // 更新徽章 - Update badge
+      updateBadge();
+    });
+  } catch (error) {
+    console.error('❌ Exception starting download:', error);
+    interceptInfo.status = 'failed';
+    interceptInfo.error = error.message;
+  }
+}
+
 // 显示拦截通知 - Show interception notification
 function showInterceptionNotification(info) {
   const message = `已拦截下载: ${info.filename}\n大小: ${formatFileSize(info.size)}`;
@@ -233,6 +287,63 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// 更新徽章显示 - Update badge display
+function updateBadge() {
+  const activeDownloads = Array.from(backgroundDownloads.values()).filter(
+    info => info.status === 'downloading'
+  ).length;
+  
+  if (activeDownloads > 0) {
+    chrome.action.setBadgeText({ text: String(activeDownloads) });
+    chrome.action.setBadgeBackgroundColor({ color: '#4CAF50' }); // Green for active downloads
+  } else {
+    chrome.action.setBadgeText({ text: String(interceptedDownloads.length) });
+    chrome.action.setBadgeBackgroundColor({ color: '#2196F3' }); // Blue for completed
+  }
+}
+
+// ============================================================================
+// 3. 监听下载状态变化 - Monitor Download State Changes
+// ============================================================================
+
+// 监听下载进度 - Monitor download progress
+chrome.downloads.onChanged.addListener((downloadDelta) => {
+  if (!backgroundDownloads.has(downloadDelta.id)) {
+    return; // 不是我们管理的下载 - Not a download we manage
+  }
+  
+  const interceptInfo = backgroundDownloads.get(downloadDelta.id);
+  
+  // 更新状态 - Update status
+  if (downloadDelta.state) {
+    if (downloadDelta.state.current === 'complete') {
+      console.log('✅ Download completed:', interceptInfo.filename);
+      interceptInfo.status = 'completed';
+      interceptInfo.completedTime = new Date().toISOString();
+      updateBadge();
+    } else if (downloadDelta.state.current === 'interrupted') {
+      console.log('❌ Download interrupted:', interceptInfo.filename);
+      interceptInfo.status = 'failed';
+      interceptInfo.error = downloadDelta.error?.current || 'Download interrupted';
+      updateBadge();
+    }
+  }
+  
+  // 更新字节数 - Update bytes received
+  if (downloadDelta.bytesReceived) {
+    interceptInfo.bytesReceived = downloadDelta.bytesReceived.current;
+    if (interceptInfo.size > 0) {
+      interceptInfo.progress = Math.round((interceptInfo.bytesReceived / interceptInfo.size) * 100);
+      console.log(`📊 Download progress: ${interceptInfo.filename} - ${interceptInfo.progress}%`);
+    }
+  }
+  
+  // 更新文件名（可能在下载过程中改变）- Update filename (may change during download)
+  if (downloadDelta.filename) {
+    interceptInfo.savedFilename = downloadDelta.filename.current;
+  }
+});
+
 // ============================================================================
 // 消息处理 - Message Handling
 // ============================================================================
@@ -240,6 +351,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received:', message);
   
   if (message.action === 'getInterceptedDownloads') {
+    // 返回所有拦截的下载（包括状态信息）- Return all intercepted downloads with status
     sendResponse({ downloads: interceptedDownloads });
     return true;
   }
@@ -257,8 +369,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'clearHistory') {
     interceptedDownloads.length = 0;
+    backgroundDownloads.clear();
     chrome.action.setBadgeText({ text: '' });
     sendResponse({ success: true });
+    return true;
+  }
+  
+  if (message.action === 'getStats') {
+    // 返回统计信息 - Return statistics
+    const stats = {
+      total: interceptedDownloads.length,
+      downloading: Array.from(backgroundDownloads.values()).filter(d => d.status === 'downloading').length,
+      completed: interceptedDownloads.filter(d => d.status === 'completed').length,
+      failed: interceptedDownloads.filter(d => d.status === 'failed').length
+    };
+    sendResponse({ stats });
     return true;
   }
 });

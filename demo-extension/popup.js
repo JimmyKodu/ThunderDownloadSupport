@@ -5,15 +5,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 获取配置和拦截历史
   const config = await getConfig();
   const downloads = await getInterceptedDownloads();
+  const stats = await getStats();
   
   // 更新 UI
   updateStatus(config.enabled);
   updateConfig(config);
+  updateStats(stats);
   updateDownloadList(downloads);
   
   // 绑定按钮事件
   document.getElementById('toggleBtn').addEventListener('click', toggleInterception);
   document.getElementById('clearBtn').addEventListener('click', clearHistory);
+  
+  // 每秒刷新下载状态 - Refresh download status every second
+  setInterval(async () => {
+    const downloads = await getInterceptedDownloads();
+    const stats = await getStats();
+    updateStats(stats);
+    updateDownloadList(downloads);
+  }, 1000);
 });
 
 // 获取配置
@@ -30,6 +40,15 @@ async function getInterceptedDownloads() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getInterceptedDownloads' }, (response) => {
       resolve(response.downloads);
+    });
+  });
+}
+
+// 获取统计信息
+async function getStats() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'getStats' }, (response) => {
+      resolve(response.stats);
     });
   });
 }
@@ -67,6 +86,39 @@ function updateConfig(config) {
   blacklistEl.innerHTML = config.blacklistDomains
     .map(domain => `<div style="font-size:12px;color:#666;margin:2px 0;">• ${domain}</div>`)
     .join('');
+  
+  // 下载文件夹
+  const folderEl = document.getElementById('downloadFolder');
+  if (folderEl) {
+    folderEl.textContent = config.downloadFolder || 'ThunderDownloads';
+  }
+}
+
+// 更新统计信息显示
+function updateStats(stats) {
+  const statsEl = document.getElementById('stats');
+  if (statsEl && stats) {
+    statsEl.innerHTML = `
+      <div style="display:flex;justify-content:space-around;padding:10px;background:#f5f5f5;border-radius:5px;margin:10px 0;">
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:bold;color:#2196F3;">${stats.total}</div>
+          <div style="font-size:11px;color:#666;">总计</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:bold;color:#4CAF50;">${stats.downloading}</div>
+          <div style="font-size:11px;color:#666;">下载中</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:bold;color:#8BC34A;">${stats.completed}</div>
+          <div style="font-size:11px;color:#666;">已完成</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:bold;color:#F44336;">${stats.failed}</div>
+          <div style="font-size:11px;color:#666;">失败</div>
+        </div>
+      </div>
+    `;
+  }
 }
 
 // 更新下载列表
@@ -89,15 +141,55 @@ function updateDownloadList(downloads) {
   // 显示最近的下载（倒序）
   const recentDownloads = downloads.slice().reverse().slice(0, 10);
   
-  listEl.innerHTML = recentDownloads.map(download => `
-    <div class="download-item">
-      <div class="download-filename">📦 ${escapeHtml(download.filename)}</div>
-      <div class="download-detail">🔗 URL: ${escapeHtml(shortenUrl(download.url))}</div>
-      <div class="download-detail">📊 大小: ${formatFileSize(download.size)}</div>
-      <div class="download-detail">🌐 来源: ${escapeHtml(extractDomain(download.referrer))}</div>
-      <div class="download-detail">⏰ 时间: ${formatTime(download.timestamp)}</div>
-    </div>
-  `).join('');
+  listEl.innerHTML = recentDownloads.map(download => {
+    // 状态图标和颜色
+    let statusIcon = '⏳';
+    let statusColor = '#FFC107';
+    let statusText = '拦截';
+    
+    if (download.status === 'downloading') {
+      statusIcon = '⬇️';
+      statusColor = '#4CAF50';
+      statusText = '下载中';
+    } else if (download.status === 'completed') {
+      statusIcon = '✅';
+      statusColor = '#8BC34A';
+      statusText = '已完成';
+    } else if (download.status === 'failed') {
+      statusIcon = '❌';
+      statusColor = '#F44336';
+      statusText = '失败';
+    }
+    
+    // 进度条
+    let progressBar = '';
+    if (download.status === 'downloading' && download.progress !== undefined) {
+      progressBar = `
+        <div style="margin:5px 0;">
+          <div style="background:#e0e0e0;height:4px;border-radius:2px;overflow:hidden;">
+            <div style="background:#4CAF50;height:100%;width:${download.progress}%;transition:width 0.3s;"></div>
+          </div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">${download.progress}% - ${formatFileSize(download.bytesReceived || 0)} / ${formatFileSize(download.size)}</div>
+        </div>
+      `;
+    }
+    
+    return `
+      <div class="download-item">
+        <div class="download-filename">
+          <span style="color:${statusColor};">${statusIcon}</span> ${escapeHtml(download.filename)}
+          <span style="background:${statusColor};color:white;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:5px;">${statusText}</span>
+        </div>
+        ${progressBar}
+        <div class="download-detail">🔗 URL: ${escapeHtml(shortenUrl(download.url))}</div>
+        <div class="download-detail">📊 大小: ${formatFileSize(download.size)}</div>
+        <div class="download-detail">🌐 来源: ${escapeHtml(extractDomain(download.referrer))}</div>
+        <div class="download-detail">⏰ 时间: ${formatTime(download.timestamp)}</div>
+        ${download.savedFilename ? `<div class="download-detail">📁 保存: ${escapeHtml(download.savedFilename)}</div>` : ''}
+        ${download.error ? `<div class="download-detail" style="color:#F44336;">⚠️ 错误: ${escapeHtml(download.error)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 // 切换拦截状态
